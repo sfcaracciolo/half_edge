@@ -505,7 +505,7 @@ class HalfEdgeModel:
         self.replace_triangle_by_index(t0_index, np.array([v1_index, v2_index, v3_index]))
         self.replace_triangle_by_index(t1_index, np.array([v0_index, v1_index, v3_index]))
 
-    def edge_collapse(self, h0_index: int):
+    def edge_collapse(self, h0_index: int) -> list:
         
         # get data 
 

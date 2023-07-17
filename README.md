@@ -9,7 +9,7 @@ An implementation of half-edge data structure based on ```open3d.geometry.HalfEd
 
 ## Usage
 
-```
+```python
 from half_edge import HalfEdgeModel
 
 vertices = # numpy.ndarray [float32] or open3d.utility.Vector3dVector
@@ -21,7 +21,7 @@ model = HalfEdgeModel(vertices, triangles)
 
 In ```model.half_edges``` is stored a *list* with the half edges. You can use a index *h_index* of any half edge to operate on it,
 
-```
+```python
 model.split_edge(h_index)
 model.edge_flip(h_index)
 p_ring = model.edge_collapse(h_index)
@@ -29,7 +29,7 @@ p_ring = model.edge_collapse(h_index)
 
 if you want revert the collpase operation,
 
-```
+```python
 model.revert_edge_collapse(p_ring)
 ```
 

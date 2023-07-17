@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "half_edge"
+version = "0.0.1"
+authors = [
+    {name = "Santiago F. Caracciolo", email = "santiago.caracciolo@gmail.com"},
+]
+description = "An implementation of Half Edge Data Structure based on Open3D with basic operations such as split, collapse and flip edges."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "open3d"
+]

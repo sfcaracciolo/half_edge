@@ -8,16 +8,20 @@ class HalfEdgeModel:
 
     def __init__(self, vertices: Union[np.ndarray, Vector3dVector], triangles: Union[np.ndarray, Vector3iVector]) -> None:
 
+        self.n_vertices = vertices.shape[0] if isinstance(vertices, np.ndarray) else np.asarray(vertices).shape[0]
+        vertices = Vector3dVector(vertices) if isinstance(vertices, np.ndarray) else vertices
+        triangles = Vector3iVector(triangles) if isinstance(triangles, np.ndarray) else triangles
+        _triangle_mesh = TriangleMesh(vertices, triangles)
+
+        self.load(_triangle_mesh)
+
+    def load(self, triangle_mesh: TriangleMesh) -> None:
+
         self.unreferenced_vertices = []
         self.unreferenced_triangles = []
         self.unreferenced_half_edges = []
 
-        self.n_vertices = vertices.shape[0] if isinstance(vertices, np.ndarray) else np.asarray(vertices).shape[0]
-        vertices = Vector3dVector(vertices) if isinstance(vertices, np.ndarray) else vertices
-        triangles = Vector3iVector(triangles) if isinstance(triangles, np.ndarray) else triangles
-
-        _triangle_mesh = TriangleMesh(vertices, triangles)
-        self._model = HalfEdgeTriangleMesh.create_from_triangle_mesh(_triangle_mesh)
+        self._model = HalfEdgeTriangleMesh.create_from_triangle_mesh(triangle_mesh)
 
         self.half_edges = self._model.half_edges
         self.vertices = self._model.vertices
@@ -27,14 +31,7 @@ class HalfEdgeModel:
         _triangle_mesh = TriangleMesh(self.vertices, self.triangles)
         _triangle_mesh.remove_triangles_by_index(self.unreferenced_triangles)
         _triangle_mesh.remove_vertices_by_index(self.unreferenced_vertices)
-
-        self.vertices = _triangle_mesh.vertices
-        self.triangles = _triangle_mesh.triangles
-        self.half_edges = [ h for i, h in enumerate(self.half_edges) if i not in self.unreferenced_half_edges ]
-
-        self.unreferenced_vertices = []
-        self.unreferenced_triangles = []
-        self.unreferenced_half_edges = []
+        self.load(_triangle_mesh)
 
     def topology_checker(self, clean=True):
         if clean: self.clean()
@@ -96,6 +93,18 @@ class HalfEdgeModel:
     def get_start_vertex_index(self, h_index:int):
         return self.get_vertex_indices(h_index)[0]
 
+    def get_edge_by_index(self, h_index:int) -> np.ndarray:
+        return np.diff(self.get_vertices_by_edge(h_index), axis=0)
+    
+    def get_next_index_on_ring(self, h_index:int, clockwise:bool):
+        if clockwise:
+            th_index = self.get_twin_index(h_index)
+            return self.get_next_index(th_index)
+        else:
+            nh_index = self.get_next_index(h_index)
+            nnh_index = self.get_next_index(nh_index)
+            return self.get_twin_index(nnh_index)
+
     # get vertices and triangles methods
 
     def get_vertices_by_indices(self, indices: Union[int, List[int]]):
@@ -153,6 +162,17 @@ class HalfEdgeModel:
         vertices = self.get_triangle_vertices_by_edge(h_index)
         return vector_tools.triangle_normal(vertices, normalize=True)
 
+    
+    def compactness(self, h_index:int):
+        vertices = self.get_triangle_vertices_by_edge(h_index)
+        return vector_tools.triangle_compactness(vertices)
+    
+    def area(self, h_index:int):
+        vertices = self.get_triangle_vertices_by_edge(h_index)
+        vectors = np.diff(vertices, axis=0, append=vertices[0][np.newaxis,:])
+        lengths = np.linalg.norm(vectors, axis=1)
+        return vector_tools.triangle_area(lengths)
+    
     def vertex_normal(self, h_index:int): 
         r = list(self.normal_ring(h_index))
         return sum(r)/len(r)
@@ -161,28 +181,29 @@ class HalfEdgeModel:
         indices = list(self.vertex_ring(h_index))
         vertices = self.get_vertices_by_indices(indices)
         return np.mean(vertices, axis=0)
-    
-    def compactness(self, h_index:int):
-        vertices = self.get_triangle_vertices_by_edge(h_index)
-        return vector_tools.triangle_compactness(vertices)
 
     def mean_compactness(self, h_index:int):
         r = list(self.compactness_ring(h_index))
         return sum(r)/len(r)
     
+    def mean_area(self, h_index:int):
+        r = list(self.area_ring(h_index))
+        return sum(r)/len(r)
+
+    def mean_edge_len(self, h_index:int):
+        r = list(self.edge_len_ring(h_index))
+        return sum(r)/len(r)
+    
     # ring methods
 
-    def edge_ring(self, h_index:int):
-        # argument of fun must be a h_index
+    def edge_ring(self, h_index:int, clockwise:bool=True):
         last = h_index
-        # Clockwise edge index return
         while True:
-            th_index = self.get_twin_index(h_index)
-            nth_index = self.get_next_index(th_index)
-            yield nth_index
-            if nth_index == last:
+            nh_index = self.get_next_index_on_ring(h_index, clockwise)
+            yield nh_index
+            if nh_index == last:
                 break
-            h_index = nth_index
+            h_index = nh_index
     
     def vertex_ring(self, h_index:int):
         return map(self.get_end_vertex_index, self.edge_ring(h_index))
@@ -195,6 +216,12 @@ class HalfEdgeModel:
 
     def compactness_ring(self, h_index:int):
         return map(self.compactness, self.edge_ring(h_index))
+    
+    def area_ring(self, h_index:int):
+        return map(self.area, self.edge_ring(h_index))
+
+    def edge_len_ring(self, h_index:int):
+        return map(self.edge_len, self.edge_ring(h_index))
 
     # set vertices and triangles methods
 

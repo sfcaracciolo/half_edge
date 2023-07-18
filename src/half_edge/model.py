@@ -13,22 +13,40 @@ class HalfEdgeModel:
         self.unreferenced_half_edges = []
 
         self.n_vertices = vertices.shape[0] if isinstance(vertices, np.ndarray) else np.asarray(vertices).shape[0]
-        self.vertices = Vector3dVector(vertices) if isinstance(vertices, np.ndarray) else vertices
-        self.triangles = Vector3iVector(triangles) if isinstance(triangles, np.ndarray) else triangles
-        _triangle_mesh = TriangleMesh(self.vertices, self.triangles)
-        self.half_edges = HalfEdgeTriangleMesh.create_from_triangle_mesh(_triangle_mesh).half_edges
+        vertices = Vector3dVector(vertices) if isinstance(vertices, np.ndarray) else vertices
+        triangles = Vector3iVector(triangles) if isinstance(triangles, np.ndarray) else triangles
+
+        _triangle_mesh = TriangleMesh(vertices, triangles)
+        self._model = HalfEdgeTriangleMesh.create_from_triangle_mesh(_triangle_mesh)
+
+        self.half_edges = self._model.half_edges
+        self.vertices = self._model.vertices
+        self.triangles = self._model.triangles
 
     def clean(self):
         _triangle_mesh = TriangleMesh(self.vertices, self.triangles)
         _triangle_mesh.remove_triangles_by_index(self.unreferenced_triangles)
         _triangle_mesh.remove_vertices_by_index(self.unreferenced_vertices)
+
         self.vertices = _triangle_mesh.vertices
         self.triangles = _triangle_mesh.triangles
-        self.half_edges = HalfEdgeTriangleMesh.create_from_triangle_mesh(_triangle_mesh).half_edges
+        self.half_edges = [ h for i, h in enumerate(self.half_edges) if i not in self.unreferenced_half_edges ]
 
         self.unreferenced_vertices = []
         self.unreferenced_triangles = []
         self.unreferenced_half_edges = []
+
+    def topology_checker(self, clean=True):
+        if clean: self.clean()
+        _triangle_mesh = TriangleMesh(self.vertices, self.triangles)
+        print('===== TOPOLOGY CHECKER =====')
+        print(f'Euler characteristic = {_triangle_mesh.euler_poincare_characteristic()}')
+        print(f'Watertight = {_triangle_mesh.is_watertight()}')
+        print(f'Orientable = {_triangle_mesh.is_orientable()}')
+        print(f'Vertices start/end = {self.n_vertices}/{self.amount_of_vertices()}')
+        print(f'Vertex non-manifold = {np.asarray(_triangle_mesh.get_non_manifold_vertices()).shape[0]}')
+        print(f'Edge non-manifold = {np.asarray(_triangle_mesh.get_non_manifold_edges()).shape[0]}')
+        print(f'Self-intersection = {np.asarray(_triangle_mesh.get_self_intersecting_triangles()).shape[0]}')
 
     # basic shape methods
 

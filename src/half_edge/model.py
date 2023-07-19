@@ -2,7 +2,7 @@ from typing import List, Union
 import numpy as np 
 from open3d.utility import  Vector3dVector, Vector3iVector
 from open3d.geometry import HalfEdge, TriangleMesh, HalfEdgeTriangleMesh
-import vector_tools 
+from vector_tools import BiPoint, TriPoint
 
 class HalfEdgeModel:
 
@@ -47,14 +47,20 @@ class HalfEdgeModel:
 
     # basic shape methods
 
-    def amount_of_vertices(self):
-        return np.asarray(self.vertices).shape[0]
+    def amount_of_vertices(self, clean=False):
+        N = np.asarray(self.vertices).shape[0]
+        if clean: N -= len(self.unreferenced_vertices)
+        return N
     
-    def amount_of_triangles(self):
-        return np.asarray(self.triangles).shape[0]
+    def amount_of_triangles(self, clean=False):
+        T = np.asarray(self.triangles).shape[0]
+        if clean: T -= len(self.unreferenced_triangles)
+        return T
     
-    def amount_of_half_edges(self):
-        return len(self.half_edges)
+    def amount_of_half_edges(self, clean=False):
+        E = len(self.half_edges)
+        if clean: E -= len(self.unreferenced_half_edges)
+        return E
 
     # create/update half edge methods 
 
@@ -129,8 +135,12 @@ class HalfEdgeModel:
         t_index = self.get_triangle_index(h_index)
         return self.get_triangles_by_indices(t_index)
 
-    def get_triangle_vertices_by_edge(self, h_index:int):
+    def get_triangle_vertices_by_edge(self, h_index:int, sort:bool = True):
         triangle = self.get_triangle_indices_by_edge(h_index)
+        if sort: # put start vertex first on vertices, useful to triangle rings
+            s_index = self.get_start_vertex_index(h_index)
+            ix = np.argwhere(triangle == s_index)[0, 0]
+            if ix > 0: triangle = np.roll(triangle, -ix)
         return self.get_vertices_by_indices(triangle)
     
     # adjacent methods
@@ -153,50 +163,14 @@ class HalfEdgeModel:
 
     def edge_len(self, h_index:int):
         vertices = self.get_vertices_by_edge(h_index)
-        return vector_tools.distance(vertices)
+        return BiPoint.distance(vertices)
 
     def valence(self, h_index:int):
-        return len(list(self.edge_ring(h_index)))
+        return len(list(self.one_ring(h_index)))
 
-    def triangle_normal(self, h_index:int):
-        vertices = self.get_triangle_vertices_by_edge(h_index)
-        return vector_tools.triangle_normal(vertices, normalize=True)
-
-    
-    def compactness(self, h_index:int):
-        vertices = self.get_triangle_vertices_by_edge(h_index)
-        return vector_tools.triangle_compactness(vertices)
-    
-    def area(self, h_index:int):
-        vertices = self.get_triangle_vertices_by_edge(h_index)
-        vectors = np.diff(vertices, axis=0, append=vertices[0][np.newaxis,:])
-        lengths = np.linalg.norm(vectors, axis=1)
-        return vector_tools.triangle_area(lengths)
-    
-    def vertex_normal(self, h_index:int): 
-        r = list(self.normal_ring(h_index))
-        return sum(r)/len(r)
-    
-    def mean_vertex(self, h_index:int): 
-        indices = list(self.vertex_ring(h_index))
-        vertices = self.get_vertices_by_indices(indices)
-        return np.mean(vertices, axis=0)
-
-    def mean_compactness(self, h_index:int):
-        r = list(self.compactness_ring(h_index))
-        return sum(r)/len(r)
-    
-    def mean_area(self, h_index:int):
-        r = list(self.area_ring(h_index))
-        return sum(r)/len(r)
-
-    def mean_edge_len(self, h_index:int):
-        r = list(self.edge_len_ring(h_index))
-        return sum(r)/len(r)
-    
     # ring methods
 
-    def edge_ring(self, h_index:int, clockwise:bool=True):
+    def one_ring(self, h_index:int, clockwise:bool=True):
         last = h_index
         while True:
             nh_index = self.get_next_index_on_ring(h_index, clockwise)
@@ -205,23 +179,13 @@ class HalfEdgeModel:
                 break
             h_index = nh_index
     
-    def vertex_ring(self, h_index:int):
-        return map(self.get_end_vertex_index, self.edge_ring(h_index))
+    def edge_ring(self, h_index:int):
+        edge = lambda h: BiPoint(self.get_vertices_by_edge(h))
+        return map(edge, self.one_ring(h_index))
 
     def triangle_ring(self, h_index:int):
-        return map(self.get_triangle_index, self.edge_ring(h_index))
-
-    def normal_ring(self, h_index:int):
-        return map(self.triangle_normal, self.edge_ring(h_index))
-
-    def compactness_ring(self, h_index:int):
-        return map(self.compactness, self.edge_ring(h_index))
-    
-    def area_ring(self, h_index:int):
-        return map(self.area, self.edge_ring(h_index))
-
-    def edge_len_ring(self, h_index:int):
-        return map(self.edge_len, self.edge_ring(h_index))
+        triangle = lambda h: TriPoint(self.get_triangle_vertices_by_edge(h))
+        return map(triangle, self.one_ring(h_index))
 
     # set vertices and triangles methods
 
@@ -351,7 +315,7 @@ class HalfEdgeModel:
 
         # create new vertex
         vertices = self.get_vertices_by_indices([v0_index, v2_index])
-        v4 = vector_tools.midpoint(vertices)
+        v4 = BiPoint.midpoint(vertices)
 
         # update half edges
         self.update_half_edge(
@@ -574,7 +538,7 @@ class HalfEdgeModel:
 
         # updates 
 
-        v1_ring = self.edge_ring(h3_index)
+        v1_ring = self.one_ring(h3_index)
         p_ring = []
 
         for h_index in v1_ring:

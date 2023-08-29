@@ -19,5 +19,5 @@ classifiers = [
 ]
 dependencies = [
     "open3d",
-    "vector_tools git+https://github.com/sfcaracciolo/vector_tools.git"
+    "vector_tools @ git+https://github.com/sfcaracciolo/vector_tools.git"
 ]

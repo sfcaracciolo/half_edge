@@ -187,6 +187,20 @@ class HalfEdgeModel:
         triangle = lambda h: TriPoint(self.get_triangle_vertices_by_edge(h))
         return map(triangle, self.one_ring(h_index))
 
+    # find routines
+    def find_h_index_by_vertex_index(self, vertex: int) -> int: # h_index
+        E = self.amount_of_half_edges()
+
+        for h_index in range(E):
+
+            if h_index in self.unreferenced_half_edges:
+                continue
+
+            if np.allclose(self.get_start_vertex_by_edge(h_index), vertex):
+                return h_index
+
+        return None 
+    
     # set vertices and triangles methods
 
     def replace_vertex_by_index(self, index: int, new_vertex: np.ndarray):
